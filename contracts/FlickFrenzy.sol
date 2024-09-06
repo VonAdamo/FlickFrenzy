@@ -75,7 +75,7 @@ contract FlickFrenzy {
 
         require(frenzy.creator == msg.sender, "Only the creator can start the frenzy");
         if (frenzy.status != Status.Inactive) {
-            revert FrenzyNotInactive("Frenzy is either active or completed");
+            revert FrenzyNotInactive("Frenzy is not inactive, cannot start.");
         }
 
         frenzy.duration = _duration;
@@ -152,7 +152,7 @@ contract FlickFrenzy {
     }
 
     receive() external payable {
-        revert("Ether transfers are not allowed in this contract.");
+        revert("Contract does not accept Ether.");
     }
 
     function getFrenzyOptions(uint _frenzyId) public view returns (string[3] memory) {
