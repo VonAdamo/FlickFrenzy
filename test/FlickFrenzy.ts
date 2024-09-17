@@ -77,24 +77,18 @@ describe("FlickFrenzy", function () {
             const frenzyName = "Best Movie";
             const options = ["Lord of the Rings", "Indiana Jones", "Star Wars"];
             
-            // Owner creates the Frenzy
             await flickFrenzy.connect(owner).createFrenzy(frenzyName, ["Lord of the Rings", "Indiana Jones", "Star Wars"]);
 
-            // Fetch the frenzy and check its initial status (Inactive)
             let frenzy = await flickFrenzy.frenzies(1);
             expect(frenzy.status).to.equal(0);
 
-            // Step 1: Ensure that a non-owner (voter1) cannot start the Frenzy before it's started
             await expect(flickFrenzy.connect(voter1).startFrenzy(1, 30)).to.be.revertedWith("Only the creator can start the frenzy");
 
-            // Step 2: Owner starts the Frenzy successfully
             await flickFrenzy.connect(owner).startFrenzy(1, 30);
             
-            // Fetch the updated frenzy and check its status (Active)
             frenzy = await flickFrenzy.frenzies(1);
             expect(frenzy.status).to.equal(1);
 
-            // Step 3: Ensure that a non-owner (voter1) cannot start the already active Frenzy
             await expect(flickFrenzy.connect(voter1).startFrenzy(1, 30)).to.be.revertedWith("Frenzy is not in the required status.");
         });
     });
@@ -114,6 +108,15 @@ describe("FlickFrenzy", function () {
             return {owner, voter1, voter2, flickFrenzy, frenzyName, options};
         }
 
+        describe("StartFrenzy function", function () {
+            it("should emit a NewFrenzyStarted event when a frenzy is started", async function () {
+                const {owner, flickFrenzy} = await deployFlickFrenzyWithFrenzyFixture();
+                
+                await expect(flickFrenzy.connect(owner).startFrenzy(1, 30))
+                    .to.emit(flickFrenzy, "NewFrenzyStarted").withArgs("Test Frenzy", "A new Frenzy has started");
+            });
+        });
+
         describe("GetFrenzies function", function () {
             it("should return all active Frenzies", async function () {
                 const {owner, flickFrenzy, frenzyName, options} = await deployFlickFrenzyWithFrenzyFixture();
@@ -127,15 +130,23 @@ describe("FlickFrenzy", function () {
         });
 
         describe("Vote function", function () {
-            it("should allow only everyone to vote once", async function () {
+            it("should allow everyone to vote once", async function () {
                 const {owner, voter1, flickFrenzy} = await deployFlickFrenzyWithFrenzyFixture();
 
                 await flickFrenzy.connect(owner).startFrenzy(1, 30);
-
                 await flickFrenzy.connect(voter1).vote(1, 1);
                 await expect(flickFrenzy.connect(voter1).vote(1, 1)).to.be.revertedWith("You can only vote one time per Frenzy.");
             });
 
+             it("should handle multiple Frenzies", async function () {
+                const {flickFrenzy} = await deployFlickFrenzyFixture();
+                for (let i = 1; i <= 10; i++) {
+                    await flickFrenzy.createFrenzy(`Frenzy ${i}`, ["Option 1", "Option 2", "Option 3"]);
+                }
+                
+                expect(await flickFrenzy.frenzyCount()).to.equal(10);
+             });
+             
             it("should limit the vote to the number of options", async function () {
                 const {owner, voter1, flickFrenzy} = await deployFlickFrenzyWithFrenzyFixture();
 
@@ -143,11 +154,17 @@ describe("FlickFrenzy", function () {
 
                 await expect(flickFrenzy.connect(voter1).vote(1, 4)).to.be.revertedWith("Invalid option, must be 0, 1, or 2.");
             });
+
+            it("should revert when voting on an inactive frenzy", async function () {
+                const {voter1, flickFrenzy} = await deployFlickFrenzyFixture();
+                await flickFrenzy.createFrenzy("Test Frenzy", ["Option 1", "Option 2", "Option 3"]);
+                await expect(flickFrenzy.connect(voter1).vote(1, 1)).to.be.revertedWith("Frenzy is not active.");
+            });
         });
 
         describe("CheckFrenzy function", function () {
             it("Should revert if the Frenzy is not active", async function () {
-                const {owner, flickFrenzy} = await deployFlickFrenzyWithFrenzyFixture();
+                const {flickFrenzy} = await deployFlickFrenzyWithFrenzyFixture();
 
                 await expect(flickFrenzy.checkFrenzy(1)).to.be.revertedWith("Frenzy is not active.");
             });
@@ -202,6 +219,36 @@ describe("FlickFrenzy", function () {
                     value: hre.ethers.parseEther("1")
                 })
                 ).to.be.revertedWith("Contract does not accept Ether.");
+            });
+        });
+
+        describe("Fallback function", function () {
+            it('should invoke the fallback function', async () => {
+                const {owner, flickFrenzy} = await deployFlickFrenzyFixture();
+            
+                const nonExistentFuncSignature = 'nonExistentFunc(uint256,uint256)';
+            
+                const fakeFlickFrenzy = new hre.ethers.Contract(
+                    await flickFrenzy.getAddress(),
+                    [
+                        ...flickFrenzy.interface.fragments,
+                        `function ${nonExistentFuncSignature}`
+                    ],
+                    owner
+                );
+            
+                const tx = fakeFlickFrenzy[nonExistentFuncSignature](8, 9);
+            
+                await expect(tx).to.be.revertedWith("Function does not exist or was called incorrectly.");
+            });  
+
+            it("should revert when calling the fallback function with invalid data", async function () {
+                const {owner, flickFrenzy} = await deployFlickFrenzyFixture();
+                const invalidData = "0x12345678";
+                await expect(owner.sendTransaction({
+                    to: flickFrenzy.getAddress(),
+                    data: invalidData
+                })).to.be.revertedWith("Function does not exist or was called incorrectly.");
             });
         });
     });

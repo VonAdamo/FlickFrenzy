@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: SEE LICENSE IN LICENSE
-pragma solidity 0.8.24;
+pragma solidity ^0.8.0;
 
 import "hardhat/console.sol";
 
@@ -74,9 +74,6 @@ contract FlickFrenzy {
         Frenzy storage frenzy = frenzies[_frenzyId];
 
         require(frenzy.creator == msg.sender, "Only the creator can start the frenzy");
-        if (frenzy.status != Status.Inactive) {
-            revert FrenzyNotInactive("Frenzy is not inactive, cannot start.");
-        }
 
         frenzy.duration = _duration;
         frenzy.startTime = block.timestamp;
